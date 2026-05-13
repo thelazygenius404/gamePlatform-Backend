@@ -219,8 +219,7 @@ Pour approfondir les concepts :
 
 ## 👨‍🎓 Auteur
 
-**Bilal** - 4ème année Génie Informatique, EMSI Rabat  
-Projet Fin d'Année (PFA) - BiblioTech
+**Bilal Elakry & Haitam Khouna** - 4ème année DDSIR -2-
 
 ---
 
