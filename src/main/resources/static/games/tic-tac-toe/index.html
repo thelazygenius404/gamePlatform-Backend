@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tic Tac Toe</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a12;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: 'Courier New', monospace;
+      color: #fff;
+      user-select: none;
+      overflow: hidden;
+    }
+    .hud { display: flex; gap: 32px; margin-bottom: 20px; }
+    .stat { text-align: center; }
+    .label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .15em; }
+    .value { font-size: 24px; font-weight: 700; color: #4ade80; }
+    .board-container { position: relative; margin-bottom: 20px; }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 80px);
+      grid-template-rows: repeat(3, 80px);
+      gap: 4px;
+      position: relative;
+      z-index: 2;
+    }
+    .cell {
+      background: #111122;
+      border: 1px solid #222240;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all .15s;
+      color: #fff;
+      position: relative;
+    }
+    .cell:hover:not(.X):not(.O) { border-color: #4ade80; }
+    .cell.X { color: #06b6d4; }
+    .cell.O { color: #f43f5e; }
+    .cell.disabled { pointer-events: none; opacity: 0.7; }
+
+    /* Animation pop pour X et O */
+    @keyframes pop {
+      0%   { transform: scale(0); opacity: 0; }
+      60%  { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .cell.animated { animation: pop 0.25s ease-out; }
+
+    /* Ligne de victoire */
+    .win-line {
+      position: absolute;
+      background: #facc15;
+      z-index: 1;
+      filter: drop-shadow(0 0 6px #facc15);
+      transition: all 0.3s ease;
+    }
+    /* 3 lignes horizontales */
+    .win-line.row0 { top: calc(0*80px + 0*4px + 38px); left: 10px; width: 220px; height: 4px; }
+    .win-line.row1 { top: calc(1*80px + 1*4px + 38px); left: 10px; width: 220px; height: 4px; }
+    .win-line.row2 { top: calc(2*80px + 2*4px + 38px); left: 10px; width: 220px; height: 4px; }
+    /* 3 lignes verticales */
+    .win-line.col0 { left: calc(0*80px + 0*4px + 38px); top: 10px; width: 4px; height: 220px; }
+    .win-line.col1 { left: calc(1*80px + 1*4px + 38px); top: 10px; width: 4px; height: 220px; }
+    .win-line.col2 { left: calc(2*80px + 2*4px + 38px); top: 10px; width: 4px; height: 220px; }
+    /* 2 diagonales */
+    .win-line.diag0 { left: 10px; top: 10px; width: 4px; height: 220px; transform: rotate(45deg); transform-origin: 38px 38px; }
+    .win-line.diag1 { left: 10px; top: 10px; width: 4px; height: 220px; transform: rotate(-45deg); transform-origin: 38px 38px; }
+
+    .controls { display: flex; gap: 8px; margin-bottom: 10px; }
+    button {
+      background: #111122; border: 1px solid #222240; color: #ccc;
+      font-size: 11px; padding: 6px 12px; border-radius: 6px;
+      cursor: pointer; font-family: inherit; transition: all .15s;
+    }
+    button:hover { border-color: #4ade80; color: #4ade80; }
+    button.active { border-color: #4ade80; color: #4ade80; }
+    .message { font-size: 13px; color: #555; min-height: 20px; text-align: center; }
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.85);
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 16px; z-index: 10;
+    }
+    .overlay.hidden { display: none; }
+    .big-btn {
+      background: #4ade80; color: #0a0a12; border: none;
+      padding: 12px 30px; border-radius: 10px; font-size: 16px;
+      font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .big-btn:hover { opacity: .85; }
+  </style>
+</head>
+<body>
+
+  <div class="hud">
+    <div class="stat">
+      <div class="label" id="scoreLabel">Score</div>
+      <div class="value" id="scoreDisplay">0</div>
+    </div>
+    <div class="stat">
+      <div class="label" id="timerLabel">Temps</div>
+      <div class="value" id="timerDisplay">0</div>
+    </div>
+    <div class="stat">
+      <div class="label" id="resultLabel">Résultat</div>
+      <div class="value" id="resultDisplay">-</div>
+    </div>
+  </div>
+
+  <div class="board-container">
+    <div class="board" id="board">
+      <div class="cell" data-index="0"></div>
+      <div class="cell" data-index="1"></div>
+      <div class="cell" data-index="2"></div>
+      <div class="cell" data-index="3"></div>
+      <div class="cell" data-index="4"></div>
+      <div class="cell" data-index="5"></div>
+      <div class="cell" data-index="6"></div>
+      <div class="cell" data-index="7"></div>
+      <div class="cell" data-index="8"></div>
+    </div>
+    <!-- Ligne de victoire (cachée par défaut) -->
+    <div class="win-line" id="winLine" style="display:none;"></div>
+  </div>
+
+  <div class="controls">
+    <button id="btnPause">⏸ <span id="pauseLabel">Pause</span></button>
+    <button id="btnRestart">↺ <span id="restartLabel">Restart</span></button>
+    <button id="btnLang" class="active">FR</button>
+  </div>
+  <div class="message" id="message"></div>
+
+  <!-- Overlay Pause -->
+  <div class="overlay hidden" id="pauseOverlay">
+    <div style="font-size:36px">⏸</div>
+    <h2 id="pTitle">Pause</h2>
+    <button class="big-btn" id="btnResume">Reprendre</button>
+  </div>
+
+  <!-- Overlay Game Over -->
+  <div class="overlay hidden" id="gameOverOverlay">
+    <div style="font-size:36px">🏁</div>
+    <h2 id="goTitle">Partie terminée</h2>
+    <div id="goScore" style="font-size:48px;font-weight:700;"></div>
+    <button class="big-btn" id="btnReplay">Rejouer</button>
+  </div>
+
+  <script>
+    // ============================================================
+    // TRADUCTIONS
+    // ============================================================
+    const TX = {
+      FR: {
+        score: 'Score', timer: 'Temps', result: 'Résultat',
+        pause: 'Pause', restart: 'Restart', resume: 'Reprendre',
+        gameOver: 'Partie terminée', playAgain: 'Rejouer',
+        win: 'Victoire', lose: 'Défaite', draw: 'Match nul',
+        yourTurn: 'Votre tour', thinking: 'L\'IA réfléchit...'
+      },
+      EN: {
+        score: 'Score', timer: 'Time', result: 'Result',
+        pause: 'Pause', restart: 'Restart', resume: 'Resume',
+        gameOver: 'Game Over', playAgain: 'Play Again',
+        win: 'You win', lose: 'You lose', draw: 'Draw',
+        yourTurn: 'Your turn', thinking: 'AI thinking...'
+      }
+    };
+
+    let lg = 'FR';
+    function t(k) { return TX[lg][k]; }
+
+    // ============================================================
+    // ÉTAT DU JEU
+    // ============================================================
+    const WIN_COMBOS = [
+      [0,1,2],[3,4,5],[6,7,8], // lignes
+      [0,3,6],[1,4,7],[2,5,8], // colonnes
+      [0,4,8],[2,4,6]          // diagonales
+    ];
+
+    let board = Array(9).fill('');
+    let currentPlayer = 'X';      // joueur humain
+    let gameActive = false;
+    let paused = false;
+    let score = 0;
+    let startTime = 0;
+    let elapsedTime = 0;
+    let timerInterval = null;
+    let winLineDiv = document.getElementById('winLine');
+
+    // Éléments du DOM
+    const cells = document.querySelectorAll('.cell');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const resultDisplay = document.getElementById('resultDisplay');
+    const message = document.getElementById('message');
+    const pauseOverlay = document.getElementById('pauseOverlay');
+    const gameOverOverlay = document.getElementById('gameOverOverlay');
+    const goScore = document.getElementById('goScore');
+
+    // Labels
+    const scoreLabel = document.getElementById('scoreLabel');
+    const timerLabel = document.getElementById('timerLabel');
+    const resultLabel = document.getElementById('resultLabel');
+    const pauseLabel = document.getElementById('pauseLabel');
+    const restartLabel = document.getElementById('restartLabel');
+    const pTitle = document.getElementById('pTitle');
+    const goTitle = document.getElementById('goTitle');
+    const btnResume = document.getElementById('btnResume');
+    const btnReplay = document.getElementById('btnReplay');
+
+    // ============================================================
+    // MISE À JOUR DE LA LANGUE
+    // ============================================================
+    function applyLang() {
+      scoreLabel.textContent = t('score');
+      timerLabel.textContent = t('timer');
+      resultLabel.textContent = t('result');
+      pauseLabel.textContent = t('pause');
+      restartLabel.textContent = t('restart');
+      pTitle.textContent = t('pause');
+      btnResume.textContent = t('resume');
+      goTitle.textContent = t('gameOver');
+      btnReplay.textContent = t('playAgain');
+      document.getElementById('btnLang').textContent = lg;
+
+      if (!gameActive && board.every(c => c === '')) {
+        message.textContent = t('yourTurn');
+      }
+    }
+
+    document.getElementById('btnLang').addEventListener('click', () => {
+      lg = lg === 'FR' ? 'EN' : 'FR';
+      applyLang();
+    });
+
+    // ============================================================
+    // GESTION DU JEU
+    // ============================================================
+    function showWinLine(comboIndex) {
+      const combo = WIN_COMBOS[comboIndex];
+      // Déterminer le type de ligne (row, col, diag)
+      // Combo : 0-1-2 => row0, 3-4-5 => row1, 6-7-8 => row2
+      // 0-3-6 => col0, 1-4-7 => col1, 2-5-8 => col2
+      // 0-4-8 => diag0, 2-4-6 => diag1
+      let type = '';
+      if (combo[0]+1 === combo[1] && combo[1]+1 === combo[2]) { // lignes
+        if (combo[0] === 0) type = 'row0';
+        else if (combo[0] === 3) type = 'row1';
+        else type = 'row2';
+      } else if (combo[0]+3 === combo[1] && combo[1]+3 === combo[2]) { // colonnes
+        if (combo[0] === 0) type = 'col0';
+        else if (combo[0] === 1) type = 'col1';
+        else type = 'col2';
+      } else if (combo[0] === 0 && combo[1] === 4 && combo[2] === 8) {
+        type = 'diag0';
+      } else if (combo[0] === 2 && combo[1] === 4 && combo[2] === 6) {
+        type = 'diag1';
+      }
+      winLineDiv.className = 'win-line ' + type;
+      winLineDiv.style.display = 'block';
+    }
+
+    function hideWinLine() {
+      winLineDiv.style.display = 'none';
+    }
+
+    function resetBoard() {
+      board = Array(9).fill('');
+      currentPlayer = 'X';
+      cells.forEach(cell => {
+        cell.textContent = '';
+        cell.className = 'cell';
+      });
+      gameActive = true;
+      paused = false;
+      pauseOverlay.classList.add('hidden');
+      gameOverOverlay.classList.add('hidden');
+      resultDisplay.textContent = '-';
+      hideWinLine();
+      message.textContent = t('yourTurn');
+      startTime = Date.now();
+      timerDisplay.textContent = '0';
+      elapsedTime = 0;
+
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        if (!paused && gameActive) {
+          elapsedTime = Math.floor((Date.now() - startTime) / 1000);
+          timerDisplay.textContent = elapsedTime;
+        }
+      }, 1000);
+    }
+
+    function handleCellClick(index) {
+      if (!gameActive || paused || board[index] !== '' || currentPlayer !== 'X') return;
+
+      board[index] = 'X';
+      const cell = cells[index];
+      cell.textContent = 'X';
+      cell.classList.add('animated', 'X');
+      setTimeout(() => cell.classList.remove('animated'), 250);
+
+      const winIndex = getWinningCombo('X');
+      if (winIndex !== -1) {
+        showWinLine(winIndex);
+        endGame('win');
+        return;
+      }
+      if (board.every(c => c !== '')) {
+        endGame('draw');
+        return;
+      }
+
+      // Tour de l'IA
+      currentPlayer = 'O';
+      message.textContent = t('thinking');
+      setTimeout(aiMove, 300);
+    }
+
+    function aiMove() {
+      if (!gameActive) return;
+      const emptyIndices = board.reduce((acc, val, idx) => val === '' ? [...acc, idx] : acc, []);
+      if (emptyIndices.length === 0) return;
+
+      const randomIndex = Math.floor(Math.random() * emptyIndices.length);
+      const idx = emptyIndices[randomIndex];
+      board[idx] = 'O';
+      const cell = cells[idx];
+      cell.textContent = 'O';
+      cell.classList.add('animated', 'O');
+      setTimeout(() => cell.classList.remove('animated'), 250);
+
+      const winIndex = getWinningCombo('O');
+      if (winIndex !== -1) {
+        showWinLine(winIndex);
+        endGame('lose');
+      } else if (board.every(c => c !== '')) {
+        endGame('draw');
+      } else {
+        currentPlayer = 'X';
+        message.textContent = t('yourTurn');
+      }
+    }
+
+    function getWinningCombo(player) {
+      for (let i = 0; i < WIN_COMBOS.length; i++) {
+        const [a,b,c] = WIN_COMBOS[i];
+        if (board[a] === player && board[b] === player && board[c] === player) {
+          return i;
+        }
+      }
+      return -1;
+    }
+
+    function endGame(result) {
+      gameActive = false;
+      clearInterval(timerInterval);
+
+      let points = 0;
+      if (result === 'win') { points = 10; resultDisplay.textContent = t('win'); }
+      else if (result === 'draw') { points = 5; resultDisplay.textContent = t('draw'); }
+      else { points = 0; resultDisplay.textContent = t('lose'); }
+      score += points;
+      scoreDisplay.textContent = score;
+
+      window.parent.postMessage({
+        type: 'GAME_OVER',
+        score: score,
+        duration: elapsedTime
+      }, '*');
+
+      goScore.textContent = points + ' pts';
+      gameOverOverlay.classList.remove('hidden');
+      message.textContent = '';
+    }
+
+    function togglePause() {
+      if (!gameActive) return;
+      paused = !paused;
+      if (paused) {
+        pauseOverlay.classList.remove('hidden');
+      } else {
+        pauseOverlay.classList.add('hidden');
+        message.textContent = currentPlayer === 'X' ? t('yourTurn') : t('thinking');
+      }
+    }
+
+    function restartGame() {
+      clearInterval(timerInterval);
+      resetBoard();
+    }
+
+    // ============================================================
+    // ÉVÉNEMENTS
+    // ============================================================
+    cells.forEach(cell => {
+      cell.addEventListener('click', () => handleCellClick(parseInt(cell.dataset.index)));
+    });
+
+    document.getElementById('btnPause').addEventListener('click', togglePause);
+    document.getElementById('btnRestart').addEventListener('click', restartGame);
+    document.getElementById('btnResume').addEventListener('click', togglePause);
+    document.getElementById('btnReplay').addEventListener('click', restartGame);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        togglePause();
+      }
+      if ((e.key === ' ' || e.key === 'Enter') && !gameActive) {
+        e.preventDefault();
+        restartGame();
+      }
+    });
+
+    // ============================================================
+    // LANCEMENT
+    // ============================================================
+    applyLang();
+    resetBoard();
+  </script>
+</body>
+</html>

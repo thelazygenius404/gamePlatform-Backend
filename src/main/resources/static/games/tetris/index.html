@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Tetris Master</title>
+  <style>
+    /* ----- Réinitialisation & styles globaux ----- */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0a0a12;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Courier New', monospace;
+      color: #fff;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* ----- Conteneur principal (canvas + panneau) ----- */
+    #wrap {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    canvas {
+      display: block;
+      border: 1px solid #1e1e3a;
+      border-radius: 4px;
+    }
+
+    /* ----- Panneau latéral ----- */
+    #side {
+      width: 130px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .panel {
+      background: #0f0f1e;
+      border: 1px solid #1e1e3a;
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .pl {
+      font-size: 10px;
+      color: #444;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+
+    .pv {
+      font-size: 20px;
+      font-weight: 700;
+      color: #06b6d4;
+    }
+
+    /* ----- Boutons du panneau latéral ----- */
+    .ctrls {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .cb {
+      background: #111122;
+      border: 1px solid #222240;
+      color: #555;
+      font-size: 11px;
+      padding: 6px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      text-align: center;
+      transition: all .15s;
+      width: 100%;
+    }
+
+    .cb:hover,
+    .cb.on {
+      border-color: #06b6d4;
+      color: #06b6d4;
+    }
+
+    /* ----- Aide touches ----- */
+    #keys {
+      font-size: 10px;
+      color: #2a2a3a;
+      line-height: 2;
+      margin-top: 4px;
+    }
+
+    /* ----- Superpositions (accueil, pause) ----- */
+    .ov {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+    }
+
+    .ov.hide {
+      display: none;
+    }
+
+    .ov h1 {
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .ov p {
+      font-size: 13px;
+      color: #06b6d4;
+    }
+
+    .ov small {
+      font-size: 11px;
+      color: #444;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      background: #06b6d4;
+      color: #0a0a12;
+      border: none;
+      padding: 11px 24px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .btn:hover {
+      opacity: .85;
+    }
+
+    .btn.ghost {
+      background: transparent;
+      border: 1px solid #2a2a4e;
+      color: #444;
+    }
+
+    .btn.ghost:hover {
+      border-color: #06b6d4;
+      color: #06b6d4;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========= Interface principale ========= -->
+  <div id="wrap">
+    <!-- Canvas principal du jeu -->
+    <canvas id="c" width="200" height="400"></canvas>
+
+    <!-- Panneau de droite -->
+    <div id="side">
+      <!-- Score -->
+      <div class="panel">
+        <div class="pl" id="lScore">Score</div>
+        <div class="pv" id="sc">0</div>
+      </div>
+
+      <!-- Lignes complétées -->
+      <div class="panel">
+        <div class="pl" id="lLines">Lignes</div>
+        <div class="pv" id="li">0</div>
+      </div>
+
+      <!-- Niveau -->
+      <div class="panel">
+        <div class="pl" id="lLevel">Niveau</div>
+        <div class="pv" id="lv">1</div>
+      </div>
+
+      <!-- Pièce suivante -->
+      <div class="panel">
+        <div class="pl" id="lNext">Suivant</div>
+        <canvas id="nc" width="90" height="80"></canvas>
+      </div>
+
+      <!-- Boutons de contrôle -->
+      <div class="ctrls">
+        <button class="cb" id="btnPause">⏸ <span id="pLabel">Pause</span></button>
+        <button class="cb" id="btnRestart">↺ <span id="rLabel">Restart</span></button>
+        <button class="cb on" id="btnLang">FR</button>
+      </div>
+
+      <!-- Raccourcis clavier -->
+      <div id="keys">← → Déplacer<br>↑ Rotation<br>↓ Descente<br>Espace Chute</div>
+    </div>
+  </div>
+
+  <!-- ========= Overlay d'accueil / Game Over ========= -->
+  <div class="ov" id="ovMain">
+    <div style="font-size:36px">🟦</div>
+    <h1 id="ovTitle">Tetris Master</h1>
+    <p id="ovSub">Complétez des lignes</p>
+    <div class="row">
+      <button class="btn" id="btnPlay">Jouer</button>
+    </div>
+  </div>
+
+  <!-- ========= Overlay Pause ========= -->
+  <div class="ov hide" id="ovPause">
+    <div style="font-size:34px">⏸</div>
+    <h1 id="ptitle">Pause</h1>
+    <small id="phint">P pour reprendre</small>
+    <div class="row">
+      <button class="btn" id="btnResume">Reprendre</button>
+      <button class="btn ghost" id="btnRestart2">Recommencer</button>
+    </div>
+  </div>
+
+  <script>
+    // ===============================================================
+    // TRADUCTIONS (français / anglais)
+    // ===============================================================
+    const TX = {
+      FR: {
+        score: 'Score',
+        lines: 'Lignes',
+        level: 'Niveau',
+        next: 'Suivant',
+        pause: 'Pause',
+        resume: 'Reprendre',
+        restart: 'Recommencer',
+        play: 'Jouer',
+        hint: 'P pour reprendre',
+        sub: 'Complétez des lignes pour marquer',
+        gameOver: 'Game Over'
+      },
+      EN: {
+        score: 'Score',
+        lines: 'Lines',
+        level: 'Level',
+        next: 'Next',
+        pause: 'Pause',
+        resume: 'Resume',
+        restart: 'Restart',
+        play: 'Play',
+        hint: 'Press P to resume',
+        sub: 'Clear lines to score',
+        gameOver: 'Game Over'
+      }
+    };
+
+    // Langue active
+    let lg = 'FR';
+
+    /** Récupère la traduction d'une clé */
+    function t(k) {
+      return TX[lg][k];
+    }
+
+    /** Applique la langue courante à toute l'interface */
+    function applyLang() {
+      document.getElementById('lScore').textContent = t('score');
+      document.getElementById('lLines').textContent = t('lines');
+      document.getElementById('lLevel').textContent = t('level');
+      document.getElementById('lNext').textContent = t('next');
+      document.getElementById('pLabel').textContent = t('pause');
+      document.getElementById('rLabel').textContent = t('restart');
+      document.getElementById('ptitle').textContent = t('pause');
+      document.getElementById('phint').textContent = t('hint');
+      document.getElementById('btnResume').textContent = t('resume');
+      document.getElementById('btnRestart2').textContent = t('restart');
+      document.getElementById('btnPlay').textContent = t('play');
+      document.getElementById('btnLang').textContent = lg;
+
+      // Légende des touches
+      const ki = document.getElementById('keys');
+      ki.innerHTML = lg === 'FR' ?
+        '← → Déplacer<br>↑ Rotation<br>↓ Descente<br>Espace Chute' :
+        '← → Move<br>↑ Rotate<br>↓ Soft drop<br>Space Hard drop';
+    }
+
+    // Changement de langue
+    document.getElementById('btnLang').addEventListener('click', () => {
+      lg = lg === 'FR' ? 'EN' : 'FR';
+      applyLang();
+    });
+
+    // ===============================================================
+    // CONSTANTES DU JEU
+    // ===============================================================
+    const C = document.getElementById('c');          // Canvas principal
+    const ctx = C.getContext('2d');
+    const NC = document.getElementById('nc');        // Canvas de la pièce suivante
+    const nctx = NC.getContext('2d');
+
+    const COLS = 10;        // Colonnes de la grille
+    const ROWS = 20;        // Lignes de la grille
+    const SZ = 20;          // Taille d'une cellule en pixels
+
+    // Palette de couleurs (index 0 = vide)
+    const COLORS = [
+      '',           // 0
+      '#06b6d4',    // 1 - cyan (I)
+      '#f59e0b',    // 2 - jaune (O)
+      '#a855f7',    // 3 - violet (T)
+      '#4ade80',    // 4 - vert (S)
+      '#ef4444',    // 5 - rouge (Z)
+      '#3b82f6',    // 6 - bleu (J)
+      '#f97316'     // 7 - orange (L)
+    ];
+
+    // Matrices des 7 pièces (index 1 à 7, index 0 inutilisé)
+    const SHAPES = [
+      [],                          // 0 (vide)
+      [[1, 1, 1, 1]],              // 1 : I
+      [[2, 2], [2, 2]],           // 2 : O
+      [[0, 3, 0], [3, 3, 3]],     // 3 : T
+      [[4, 0], [4, 0], [4, 4]],   // 4 : S
+      [[0, 5], [0, 5], [5, 5]],   // 5 : Z
+      [[6, 6, 0], [0, 6, 6]],     // 6 : J
+      [[0, 7, 7], [7, 7, 0]]      // 7 : L
+    ];
+
+    // État global du jeu
+    let board;          // Tableau 2D [ROWS][COLS], 0 = vide, 1..7 = pièce verrouillée
+    let piece;          // Pièce active { s, t, x, y }
+    let next;           // Prochaine pièce
+    let score;
+    let lines;          // Nombre total de lignes complétées
+    let level;
+    let speed;          // Intervalle en ms entre deux descentes automatiques
+    let loop;           // ID du setInterval
+    let alive = false;
+    let paused = false;
+
+    // ===============================================================
+    // GÉNÉRATION DES FORMES
+    // ===============================================================
+    /** Tire un type de pièce aléatoire (1 à 7) */
+    function rng() {
+      return Math.ceil(Math.random() * 7);
+    }
+
+    /**
+     * Crée une pièce d'un type donné.
+     * @param t - type de pièce (1..7)
+     * @returns objet { s (matrice), t (type), x, y }
+     */
+    function mkPiece(t) {
+      // Copie profonde de la forme
+      const s = SHAPES[t].map(r => [...r]);
+      // Position initiale : centrée horizontalement, tout en haut
+      return {
+        s,
+        t,
+        x: ~~((COLS - s[0].length) / 2),
+        y: 0
+      };
+    }
+
+    // ===============================================================
+    // INITIALISATION DU JEU
+    // ===============================================================
+    /** Réinitialise toutes les variables pour une nouvelle partie */
+    function init() {
+      board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+      piece = mkPiece(rng());
+      next = mkPiece(rng());
+      score = 0;
+      lines = 0;
+      level = 1;
+      speed = 500;
+      alive = false;
+      paused = false;
+
+      updateHUD();
+      render();
+      renderNext();
+    }
+
+    // ===============================================================
+    // BOUCLE PRINCIPALE
+    // ===============================================================
+    /** Lance la boucle de jeu (démarre la descente automatique) */
+    function go() {
+      alive = true;
+      if (loop) clearInterval(loop);
+      loop = setInterval(() => {
+        if (!paused) {
+          // On essaie de descendre d'une case ; si impossible, on verrouille la pièce
+          if (!mv(0, 1)) lock();
+        }
+      }, speed);
+    }
+
+    // ===============================================================
+    // MOUVEMENT / ROTATION
+    // ===============================================================
+    /**
+     * Déplace la pièce active de (dx, dy).
+     * Retourne true si le déplacement a réussi.
+     */
+    function mv(dx, dy) {
+      piece.x += dx;
+      piece.y += dy;
+
+      if (col()) {
+        // Collision => on annule le déplacement
+        piece.x -= dx;
+        piece.y -= dy;
+        return false;
+      }
+
+      render();
+      return true;
+    }
+
+    /** Rotation horaire de la pièce active */
+    function rot() {
+      const old = piece.s;
+      // Rotation : transposée puis inversion des lignes
+      piece.s = piece.s[0].map((_, i) => piece.s.map(r => r[i]).reverse());
+      if (col()) piece.s = old;     // Annulation si collision
+      render();
+    }
+
+    /** Chute immédiate (hard drop) */
+    function drop() {
+      while (mv(0, 1));    // descend tant que possible
+      lock();              // puis verrouillage
+    }
+
+    // ===============================================================
+    // DÉTECTION DE COLLISION
+    // ===============================================================
+    /** Vérifie si la pièce active est en collision avec les bords ou le plateau */
+    function col() {
+      return piece.s.some((row, dy) =>
+        row.some((v, dx) => {
+          if (!v) return false;                     // case vide de la pièce
+          const nx = piece.x + dx;
+          const ny = piece.y + dy;
+          // Hors limites ou case déjà occupée
+          return nx < 0 || nx >= COLS || ny >= ROWS || (ny >= 0 && board[ny][nx]);
+        })
+      );
+    }
+
+    // ===============================================================
+    // VERROUILLAGE DE LA PIÈCE & GESTION DES LIGNES
+    // ===============================================================
+    /** Verrouille la pièce sur le plateau et termine le tour */
+    function lock() {
+      // 1. Écrire la pièce dans le plateau
+      piece.s.forEach((row, dy) => {
+        row.forEach((v, dx) => {
+          if (v && piece.y + dy >= 0) {
+            board[piece.y + dy][piece.x + dx] = piece.t;
+          }
+        });
+      });
+
+      // 2. Suppression des lignes pleines
+      let cleared = 0;
+      board = board.filter(r => {
+        if (r.every(c => c)) {
+          cleared++;
+          return false;
+        }
+        return true;
+      });
+
+      // 3. Ajout de lignes vides en haut pour conserver ROWS lignes
+      while (board.length < ROWS) {
+        board.unshift(Array(COLS).fill(0));
+      }
+
+      // 4. Mise à jour du score et du niveau si des lignes ont été effacées
+      if (cleared) {
+        const pts = [0, 40, 100, 300, 1200]; // points pour 0,1,2,3,4 lignes
+        score += pts[cleared] * level;
+        lines += cleared;
+
+        // Montée de niveau toutes les 10 lignes
+        level = ~~(lines / 10) + 1;
+        speed = Math.max(80, 500 - level * 40);
+
+        // Redémarrer la boucle avec la nouvelle vitesse
+        clearInterval(loop);
+        loop = setInterval(() => {
+          if (!paused) {
+            if (!mv(0, 1)) lock();
+          }
+        }, speed);
+      }
+
+      // 5. Passage à la pièce suivante
+      piece = next;
+      next = mkPiece(rng());
+
+      // 6. Vérification immédiate de collision → Game Over
+      if (col()) {
+        gameover();
+        return;
+      }
+
+      updateHUD();
+      render();
+      renderNext();
+    }
+
+    // ===============================================================
+    // FIN DE PARTIE
+    // ===============================================================
+    function gameover() {
+      clearInterval(loop);
+      alive = false;
+      paused = false;
+
+      // Masquer l'overlay pause si visible
+      document.getElementById('ovPause').classList.add('hide');
+
+      // Envoyer un message à la fenêtre parente (si intégré en iframe)
+      window.parent.postMessage({
+        type: 'GAME_OVER',
+        score,
+        gameSlug: 'tetris-master',
+        duration: 0
+      }, '*');
+
+      // Afficher l'écran Game Over
+      document.getElementById('ovTitle').textContent = t('gameOver');
+      document.getElementById('ovSub').textContent = t('score') + ' : ' + score;
+      document.getElementById('btnPlay').textContent = t('restart');
+      document.getElementById('ovMain').classList.remove('hide');
+    }
+
+    // ===============================================================
+    // PAUSE / REPRISE
+    // ===============================================================
+    function togglePause() {
+      if (!alive) return;
+      paused = !paused;
+
+      // Mise à jour du bouton pause
+      document.getElementById('btnPause').innerHTML =
+        (paused ? '▶' : '⏸') + ' <span id="pLabel">' + t('pause') + '</span>';
+
+      // Afficher/masquer l'overlay pause
+      document.getElementById('ovPause').classList.toggle('hide', !paused);
+    }
+
+    // ===============================================================
+    // RECOMMENCER UNE PARTIE
+    // ===============================================================
+    function doRestart() {
+      clearInterval(loop);
+      document.getElementById('ovMain').classList.add('hide');
+      document.getElementById('ovPause').classList.add('hide');
+      document.getElementById('btnPause').innerHTML =
+        '⏸ <span id="pLabel">' + t('pause') + '</span>';
+
+      init();
+      go();
+    }
+
+    // ===============================================================
+    // MISE À JOUR DU TABLEAU DE BORD (HUD)
+    // ===============================================================
+    function updateHUD() {
+      document.getElementById('sc').textContent = score;
+      document.getElementById('li').textContent = lines;
+      document.getElementById('lv').textContent = level;
+    }
+
+    // ===============================================================
+    // DESSIN
+    // ===============================================================
+    /**
+     * Dessine un bloc sur le contexte c.
+     * @param c - contexte 2D
+     * @param x, y - coordonnées grille
+     * @param t - type de pièce (couleur)
+     * @param sz - taille de cellule (par défaut SZ)
+     */
+    function blk(c, x, y, t, sz = SZ) {
+      if (!t) return;                         // case vide => rien à dessiner
+
+      // Remplissage principal
+      c.fillStyle = COLORS[t];
+      c.fillRect(x * sz + 1, y * sz + 1, sz - 2, sz - 2);
+
+      // Liseré supérieur (clair)
+      c.fillStyle = 'rgba(255,255,255,.15)';
+      c.fillRect(x * sz + 1, y * sz + 1, sz - 2, 4);
+
+      // Liseré inférieur (sombre)
+      c.fillStyle = 'rgba(0,0,0,.2)';
+      c.fillRect(x * sz + 1, y * sz + sz - 5, sz - 2, 4);
+    }
+
+    /** Dessin complet du canvas principal (grille, plateau, pièce, ghost) */
+    function render() {
+      // Fond
+      ctx.fillStyle = '#0a0a12';
+      ctx.fillRect(0, 0, 200, 400);
+
+      // Grille
+      ctx.strokeStyle = '#0f0f1e';
+      ctx.lineWidth = 0.5;
+      for (let x = 0; x <= COLS; x++) {
+        ctx.beginPath();
+        ctx.moveTo(x * SZ, 0);
+        ctx.lineTo(x * SZ, 400);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= ROWS; y++) {
+        ctx.beginPath();
+        ctx.moveTo(0, y * SZ);
+        ctx.lineTo(200, y * SZ);
+        ctx.stroke();
+      }
+
+      // Pièces verrouillées (plateau)
+      board.forEach((row, y) =>
+        row.forEach((v, x) => blk(ctx, x, y, v))
+      );
+
+      // ----- Ghost piece (projection de la chute) -----
+      const g = {
+        ...piece,
+        s: piece.s.map(r => [...r])   // copie profonde de la forme
+      };
+
+      // Descendre virtuellement jusqu'à la collision
+      while (true) {
+        g.y++;
+        if (g.s.some((row, dy) =>
+          row.some((v, dx) => {
+            if (!v) return false;
+            const nx = g.x + dx;
+            const ny = g.y + dy;
+            return nx < 0 || nx >= COLS || ny >= ROWS || (ny >= 0 && board[ny][nx]);
+          })
+        )) {
+          g.y--;    // remonter d'un cran (dernière position valide)
+          break;
+        }
+      }
+
+      // Dessiner le ghost
+      g.s.forEach((row, dy) => {
+        row.forEach((v, dx) => {
+          if (!v || g.y + dy < 0) return;
+          ctx.fillStyle = 'rgba(255,255,255,.07)';
+          ctx.fillRect((g.x + dx) * SZ + 1, (g.y + dy) * SZ + 1, SZ - 2, SZ - 2);
+        });
+      });
+
+      // Pièce active
+      piece.s.forEach((row, dy) => {
+        row.forEach((v, dx) => {
+          if (v) blk(ctx, piece.x + dx, piece.y + dy, piece.t);
+        });
+      });
+    }
+
+    /** Dessin de la prochaine pièce dans le petit canvas */
+    function renderNext() {
+      // Fond
+      nctx.fillStyle = '#0f0f1e';
+      nctx.fillRect(0, 0, 90, 80);
+
+      const sz = 16;  // taille réduite pour l'aperçu
+      // Centrage dans la zone de 4x4 cellules
+      const ox = ~~((4 - next.s[0].length) / 2);
+      const oy = ~~((4 - next.s.length) / 2);
+
+      next.s.forEach((row, dy) => {
+        row.forEach((v, dx) => {
+          if (!v) return;
+          nctx.fillStyle = COLORS[next.t];
+          nctx.fillRect((ox + dx) * sz + 4, (oy + dy) * sz + 4, sz - 2, sz - 2);
+        });
+      });
+    }
+
+    // ===============================================================
+    // ÉVÉNEMENTS CLAVIER
+    // ===============================================================
+    document.addEventListener('keydown', e => {
+      if (!alive) return;
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (!paused) mv(-1, 0);
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (!paused) mv(1, 0);
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (!paused) mv(0, 1);
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!paused) rot();
+      }
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (!paused) drop();
+      }
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        togglePause();
+      }
+    });
+
+    // ===============================================================
+    // ÉVÉNEMENTS BOUTONS
+    // ===============================================================
+    document.getElementById('btnPause').addEventListener('click', togglePause);
+    document.getElementById('btnResume').addEventListener('click', togglePause);
+    document.getElementById('btnRestart').addEventListener('click', doRestart);
+    document.getElementById('btnRestart2').addEventListener('click', doRestart);
+    document.getElementById('btnPlay').addEventListener('click', () => {
+      document.getElementById('ovMain').classList.add('hide');
+      init();
+      go();
+    });
+
+    // ===============================================================
+    // LANCEMENT INITIAL
+    // ===============================================================
+    init();
+    applyLang();
+  </script>
+</body>
+</html>

@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Snake Retro</title>
+  <style>
+    /* ----- Réinitialisation & styles globaux ----- */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0a0a12;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: 'Courier New', monospace;
+      color: #fff;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* ----- HUD (affichage des scores et boutons) ----- */
+    #hud {
+      display: flex;
+      gap: 0;
+      align-items: center;
+      margin-bottom: 12px;
+      width: 420px;
+      justify-content: space-between;
+    }
+
+    .stats {
+      display: flex;
+      gap: 32px;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .slabel {
+      font-size: 10px;
+      color: #444;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .sval {
+      font-size: 22px;
+      font-weight: 700;
+      color: #4ade80;
+    }
+
+    .ctrls {
+      display: flex;
+      gap: 6px;
+    }
+
+    .cb {
+      background: #111122;
+      border: 1px solid #222240;
+      color: #555;
+      font-size: 12px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all .15s;
+    }
+
+    .cb:hover,
+    .cb.on {
+      border-color: #4ade80;
+      color: #4ade80;
+    }
+
+    /* ----- Zone de jeu ----- */
+    canvas {
+      display: block;
+      border: 1px solid #1e1e3a;
+      border-radius: 6px;
+    }
+
+    /* ----- Message d’aide en bas du canvas ----- */
+    #tip {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #333;
+      height: 16px;
+    }
+
+    /* ----- Superpositions (démarrage, pause, fin de partie) ----- */
+    .ov {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+    }
+
+    .ov.hide {
+      display: none;
+    }
+
+    .ov h1 {
+      font-size: 30px;
+      font-weight: 700;
+    }
+
+    .ov p {
+      font-size: 13px;
+      color: #4ade80;
+    }
+
+    .ov small {
+      font-size: 11px;
+      color: #555;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      background: #4ade80;
+      color: #0a0a12;
+      border: none;
+      padding: 11px 26px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .btn:hover {
+      opacity: .85;
+    }
+
+    .btn.ghost {
+      background: transparent;
+      border: 1px solid #2a2a4e;
+      color: #555;
+    }
+
+    .btn.ghost:hover {
+      border-color: #4ade80;
+      color: #4ade80;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========= HUD ========= -->
+  <div id="hud">
+    <div class="stats">
+      <div class="stat">
+        <div class="slabel" id="lScore">Score</div>
+        <div class="sval" id="sc">0</div>
+      </div>
+      <div class="stat">
+        <div class="slabel" id="lLevel">Niveau</div>
+        <div class="sval" id="lv">1</div>
+      </div>
+      <div class="stat">
+        <div class="slabel" id="lBest">Record</div>
+        <div class="sval" id="bs">0</div>
+      </div>
+    </div>
+    <div class="ctrls">
+      <button class="cb" id="btnPause" title="P">⏸</button>
+      <button class="cb" id="btnRestart" title="R">↺</button>
+      <button class="cb on" id="btnLang">FR</button>
+    </div>
+  </div>
+
+  <!-- Zone de dessin -->
+  <canvas id="c" width="420" height="420"></canvas>
+  <div id="tip"></div>
+
+  <!-- ========= Overlay Début / Game Over ========= -->
+  <div class="ov" id="ovMain">
+    <div style="font-size:38px">🐍</div>
+    <h1 id="ovTitle">Snake Retro</h1>
+    <p id="ovSub"></p>
+    <div class="row">
+      <button class="btn" id="btnPlay">Jouer</button>
+    </div>
+  </div>
+
+  <!-- ========= Overlay Pause ========= -->
+  <div class="ov hide" id="ovPause">
+    <div style="font-size:36px">⏸</div>
+    <h1 id="pTitle">Pause</h1>
+    <small id="pHint">P pour reprendre</small>
+    <div class="row">
+      <button class="btn" id="btnResume">Reprendre</button>
+      <button class="btn ghost" id="btnRestart2">Recommencer</button>
+    </div>
+  </div>
+
+  <script>
+    // ===============================================================
+    // TRADUCTIONS (français / anglais)
+    // ===============================================================
+    const TX = {
+      FR: {
+        score: 'Score',
+        level: 'Niveau',
+        best: 'Record',
+        tip: '↑↓←→ · WASD · P=Pause',
+        play: 'Jouer',
+        resume: 'Reprendre',
+        restart: 'Recommencer',
+        pause: 'Pause',
+        resumeHint: 'P pour reprendre',
+        sub: 'Mange les pommes · Évite les murs',
+        gameOver: 'Game Over'
+      },
+      EN: {
+        score: 'Score',
+        level: 'Level',
+        best: 'Best',
+        tip: '↑↓←→ · WASD · P=Pause',
+        play: 'Play',
+        resume: 'Resume',
+        restart: 'Restart',
+        pause: 'Paused',
+        resumeHint: 'Press P to resume',
+        sub: 'Eat apples · Avoid walls',
+        gameOver: 'Game Over'
+      }
+    };
+
+    // Langue active
+    let lg = 'FR';
+
+    /** Récupère la traduction d'une clé */
+    function t(k) {
+      return TX[lg][k];
+    }
+
+    /** Applique la langue actuelle à l'interface */
+    function applyLang() {
+      document.getElementById('lScore').textContent = t('score');
+      document.getElementById('lLevel').textContent = t('level');
+      document.getElementById('lBest').textContent = t('best');
+      document.getElementById('btnPlay').textContent = t('play');
+      document.getElementById('btnResume').textContent = t('resume');
+      document.getElementById('btnRestart2').textContent = t('restart');
+      document.getElementById('pTitle').textContent = t('pause');
+      document.getElementById('pHint').textContent = t('resumeHint');
+      document.getElementById('btnLang').textContent = lg;
+
+      // Le texte d'aide ne s'affiche que pendant une partie en cours
+      if (alive) document.getElementById('tip').textContent = t('tip');
+    }
+
+    // Gestion du bouton de changement de langue
+    document.getElementById('btnLang').addEventListener('click', () => {
+      lg = lg === 'FR' ? 'EN' : 'FR';
+      applyLang();
+    });
+
+    // ===============================================================
+    // ÉLÉMENTS DU JEU
+    // ===============================================================
+    const C = document.getElementById('c');
+    const ctx = C.getContext('2d');
+
+    const SZ = 21;              // Taille d’une cellule en pixels
+    const COLS = 20;            // Colonnes
+    const ROWS = 20;            // Lignes
+
+    // Variables d’état du jeu
+    let snake;
+    let dir;                    // Direction actuelle
+    let ndir;                   // Prochaine direction (tampon)
+    let food;
+    let score;
+    let level;
+    let speed;                  // Intervalle en ms entre deux ticks
+    let loop;                   // Identifiant du setInterval
+    let best = +localStorage.getItem('sb') || 0;
+    let alive = false;
+    let paused = false;
+
+    document.getElementById('bs').textContent = best;
+
+    // ===============================================================
+    // GESTION DE LA POMME
+    // ===============================================================
+    /** Place une pomme aléatoirement, sans superposition avec le serpent */
+    function placeFood() {
+      do {
+        food = {
+          x: ~~(Math.random() * COLS),
+          y: ~~(Math.random() * ROWS)
+        };
+      } while (snake.some(s => s.x === food.x && s.y === food.y));
+    }
+
+    // ===============================================================
+    // INITIALISATION / RÉINITIALISATION
+    // ===============================================================
+    /** Réinitialise toutes les variables d'une nouvelle partie (sans lancer la boucle) */
+    function init() {
+      snake = [
+        { x: 10, y: 10 },
+        { x: 9, y: 10 },
+        { x: 8, y: 10 }
+      ];
+      dir = { x: 1, y: 0 };
+      ndir = { x: 1, y: 0 };
+      score = 0;
+      level = 1;
+      speed = 155;
+      paused = false;
+      alive = false;
+
+      placeFood();
+      render();
+      updateHUD();
+
+      document.getElementById('ovSub').textContent = t('sub');
+      document.getElementById('tip').textContent = '';
+    }
+
+    /** Lance la boucle de jeu */
+    function startGame() {
+      if (loop) clearInterval(loop);
+      loop = setInterval(() => {
+        if (!paused) tick();
+      }, speed);
+      alive = true;
+      document.getElementById('tip').textContent = t('tip');
+    }
+
+    // ===============================================================
+    // BOUCLE PRINCIPALE (tick)
+    // ===============================================================
+    /** Exécute un pas du jeu : déplacement, collision, mangeage, etc. */
+    function tick() {
+      // Appliquer la direction demandée
+      dir = { ...ndir };
+
+      // Calcul de la nouvelle tête
+      const h = {
+        x: snake[0].x + dir.x,
+        y: snake[0].y + dir.y
+      };
+
+      // Collision avec les murs ou le corps
+      if (
+        h.x < 0 || h.x >= COLS ||
+        h.y < 0 || h.y >= ROWS ||
+        snake.some(s => s.x === h.x && s.y === h.y)
+      ) {
+        gameover();
+        return;
+      }
+
+      // Ajouter la nouvelle tête
+      snake.unshift(h);
+
+      // Si la pomme est mangée
+      if (h.x === food.x && h.y === food.y) {
+        score += level * 10;
+
+        // Montée de niveau tous les (level * 60) points
+        if (score % (level * 60) === 0) {
+          level++;
+          speed = Math.max(65, speed - 12);     // La vitesse augmente, intervalle minimum 65ms
+          clearInterval(loop);
+          loop = setInterval(() => {
+            if (!paused) tick();
+          }, speed);
+        }
+
+        placeFood();
+      } else {
+        // Sinon on retire la queue
+        snake.pop();
+      }
+
+      updateHUD();
+      render();
+    }
+
+    // ===============================================================
+    // FIN DE PARTIE
+    // ===============================================================
+    function gameover() {
+      clearInterval(loop);
+      alive = false;
+      paused = false;
+
+      // Masquer l'overlay pause s'il était affiché
+      document.getElementById('ovPause').classList.add('hide');
+
+      // Sauvegarde du meilleur score
+      if (score > best) {
+        best = score;
+        localStorage.setItem('sb', best);
+      }
+
+      // Message à la page parente (si intégré dans un iframe)
+      window.parent.postMessage({
+        type: 'GAME_OVER',
+        score,
+        gameSlug: 'snake-retro',
+        duration: 0
+      }, '*');
+
+      // Affichage de l'overlay Game Over
+      document.getElementById('ovTitle').textContent = t('gameOver');
+      document.getElementById('ovSub').textContent = t('score') + ' : ' + score;
+      document.getElementById('btnPlay').textContent = t('restart');
+      document.getElementById('ovMain').classList.remove('hide');
+
+      updateHUD();
+    }
+
+    // ===============================================================
+    // PAUSE / REPRISE
+    // ===============================================================
+    function togglePause() {
+      if (!alive) return;
+      paused = !paused;
+
+      // Met à jour l'icône du bouton Pause
+      document.getElementById('btnPause').textContent = paused ? '▶' : '⏸';
+
+      // Affiche ou masque l'overlay pause
+      document.getElementById('ovPause').classList.toggle('hide', !paused);
+    }
+
+    // ===============================================================
+    // RECOMMENCER UNE PARTIE
+    // ===============================================================
+    function doRestart() {
+      clearInterval(loop);
+      document.getElementById('ovMain').classList.add('hide');
+      document.getElementById('ovPause').classList.add('hide');
+      document.getElementById('btnPause').textContent = '⏸';
+
+      init();
+      startGame();
+    }
+
+    // ===============================================================
+    // MISE À JOUR DU TABLEAU DE BORD
+    // ===============================================================
+    function updateHUD() {
+      document.getElementById('sc').textContent = score;
+      document.getElementById('lv').textContent = level;
+      document.getElementById('bs').textContent = best;
+    }
+
+    // ===============================================================
+    // RENDU DU CANVAS
+    // ===============================================================
+    function render() {
+      // Fond
+      ctx.fillStyle = '#0a0a12';
+      ctx.fillRect(0, 0, 420, 420);
+
+      // Grille
+      ctx.strokeStyle = '#12122a';
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i < COLS; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * SZ, 0);
+        ctx.lineTo(i * SZ, 420);
+        ctx.stroke();
+      }
+      for (let i = 0; i < ROWS; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, i * SZ);
+        ctx.lineTo(420, i * SZ);
+        ctx.stroke();
+      }
+
+      // Pomme (avec ombre brillante)
+      ctx.shadowColor = '#f97316';
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = '#f97316';
+      ctx.beginPath();
+      ctx.arc(
+        food.x * SZ + SZ / 2,
+        food.y * SZ + SZ / 2,
+        SZ / 2 - 2,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Serpent
+      snake.forEach((s, i) => {
+        // Transparence progressive pour donner un effet de trainée
+        const a = 1 - (i / snake.length) * 0.55;
+        ctx.fillStyle = i === 0 ? '#4ade80' : `rgba(74,222,128,${a})`;
+
+        // Ombre portée pour la tête
+        ctx.shadowColor = i === 0 ? '#4ade80' : 'transparent';
+        ctx.shadowBlur = i === 0 ? 8 : 0;
+
+        ctx.fillRect(
+          s.x * SZ + 1,
+          s.y * SZ + 1,
+          SZ - 2,
+          SZ - 2
+        );
+      });
+      ctx.shadowBlur = 0;
+    }
+
+    // ===============================================================
+    // GESTION DES ÉVÉNEMENTS CLAVIER
+    // ===============================================================
+    document.addEventListener('keydown', e => {
+      // Correspondance touches / directions
+      const m = {
+        ArrowUp:    { x: 0, y: -1 },
+        ArrowDown:  { x: 0, y: 1 },
+        ArrowLeft:  { x: -1, y: 0 },
+        ArrowRight: { x: 1, y: 0 },
+        w: { x: 0, y: -1 },
+        s: { x: 0, y: 1 },
+        a: { x: -1, y: 0 },
+        d: { x: 1, y: 0 }
+      };
+
+      // Changement de direction (uniquement si non en pause)
+      if (m[e.key] && !paused) {
+        e.preventDefault();
+        const d = m[e.key];
+
+        // Interdire le demi-tour (la nouvelle direction ne doit pas être l'opposée)
+        if (d.x !== -dir.x || d.y !== -dir.y) {
+          ndir = d;
+        }
+      }
+
+      // Pause via la touche P
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        togglePause();
+      }
+
+      // Lancer la partie depuis l'écran d'accueil (espace ou Entrée)
+      if ((e.key === ' ' || e.key === 'Enter') && !alive) {
+        e.preventDefault();
+        document.getElementById('ovMain').classList.add('hide');
+        init();
+        startGame();
+      }
+    });
+
+    // ===============================================================
+    // GESTION DES BOUTONS (UI)
+    // ===============================================================
+    document.getElementById('btnPause').addEventListener('click', togglePause);
+    document.getElementById('btnResume').addEventListener('click', togglePause);
+    document.getElementById('btnRestart').addEventListener('click', doRestart);
+    document.getElementById('btnRestart2').addEventListener('click', doRestart);
+
+    document.getElementById('btnPlay').addEventListener('click', () => {
+      document.getElementById('ovMain').classList.add('hide');
+      init();
+      startGame();
+    });
+
+    // ===============================================================
+    // LANCEMENT INITIAL
+    // ===============================================================
+    init();
+    applyLang();
+  </script>
+</body>
+</html>

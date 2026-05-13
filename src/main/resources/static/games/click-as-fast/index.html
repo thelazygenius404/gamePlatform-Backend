@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Click as Fast</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a12;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: 'Courier New', monospace;
+      color: #fff;
+      user-select: none;
+      overflow: hidden;
+    }
+    .hud {
+      display: flex;
+      gap: 32px;
+      margin-bottom: 20px;
+    }
+    .stat {
+      text-align: center;
+    }
+    .label {
+      font-size: 10px;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: .15em;
+    }
+    .value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #4ade80;
+    }
+    .timer-value { color: #facc15; }
+    .box {
+      width: 200px;
+      height: 200px;
+      background: #1e1e3a;
+      border: 2px solid #4ade80;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 48px;
+      font-weight: bold;
+      color: #4ade80;
+      transition: transform 0.05s, box-shadow 0.05s;
+      margin-bottom: 20px;
+      position: relative;
+      box-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
+    }
+    .box:active {
+      transform: scale(0.95);
+      box-shadow: 0 0 40px rgba(74, 222, 128, 0.7);
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    button {
+      background: #111122;
+      border: 1px solid #222240;
+      color: #ccc;
+      font-size: 11px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all .15s;
+    }
+    button:hover { border-color: #4ade80; color: #4ade80; }
+    button.active { border-color: #4ade80; color: #4ade80; }
+    .message {
+      font-size: 13px;
+      color: #555;
+      min-height: 20px;
+      text-align: center;
+    }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 10;
+    }
+    .overlay.hidden { display: none; }
+    .big-btn {
+      background: #4ade80;
+      color: #0a0a12;
+      border: none;
+      padding: 12px 30px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .big-btn:hover { opacity: .85; }
+  </style>
+</head>
+<body>
+
+<div class="hud">
+  <div class="stat">
+    <div class="label" id="scoreLabel">Score</div>
+    <div class="value" id="scoreDisplay">0</div>
+  </div>
+  <div class="stat">
+    <div class="label" id="timerLabel">Temps</div>
+    <div class="value timer-value" id="timerDisplay">15</div>
+  </div>
+  <div class="stat">
+    <div class="label" id="bestLabel">Record</div>
+    <div class="value" id="bestDisplay">0</div>
+  </div>
+</div>
+
+<div class="box" id="clickBox">🖱️</div>
+
+<div class="controls">
+  <button id="btnPause">⏸ <span id="pauseLabel">Pause</span></button>
+  <button id="btnRestart">↺ <span id="restartLabel">Restart</span></button>
+  <button id="btnLang" class="active">FR</button>
+</div>
+<div class="message" id="message"></div>
+
+<!-- Overlay Pause -->
+<div class="overlay hidden" id="pauseOverlay">
+  <div style="font-size:36px">⏸</div>
+  <h2 id="pTitle">Pause</h2>
+  <button class="big-btn" id="btnResume">Reprendre</button>
+</div>
+
+<!-- Overlay Game Over -->
+<div class="overlay hidden" id="gameOverOverlay">
+  <div style="font-size:36px">🏁</div>
+  <h2 id="goTitle">Terminé !</h2>
+  <div id="goScore" style="font-size:48px;font-weight:700;"></div>
+  <button class="big-btn" id="btnReplay">Rejouer</button>
+</div>
+
+<script>
+  // ============================================================
+  // TRADUCTIONS
+  // ============================================================
+  const TX = {
+    FR: {
+      score: 'Score', timer: 'Temps', best: 'Record',
+      pause: 'Pause', restart: 'Restart', resume: 'Reprendre',
+      gameOver: 'Terminé !', playAgain: 'Rejouer',
+      startMessage: 'Cliquez vite ! 15 secondes',
+    },
+    EN: {
+      score: 'Score', timer: 'Time', best: 'Best',
+      pause: 'Pause', restart: 'Restart', resume: 'Resume',
+      gameOver: 'Game Over!', playAgain: 'Play Again',
+      startMessage: 'Click fast! 15 seconds',
+    }
+  };
+
+  let lg = 'FR';
+  function t(k) { return TX[lg][k]; }
+
+  // ============================================================
+  // ÉTAT DU JEU
+  // ============================================================
+  const DURATION = 15; // secondes
+  let score = 0;
+  let timeLeft = DURATION;
+  let best = parseInt(localStorage.getItem('clickAsFastBest') || '0');
+  let intervalId = null;
+  let gameActive = false;
+  let paused = false;
+
+  // ============================================================
+  // ÉLÉMENTS DU DOM
+  // ============================================================
+  const clickBox = document.getElementById('clickBox');
+  const scoreDisplay = document.getElementById('scoreDisplay');
+  const timerDisplay = document.getElementById('timerDisplay');
+  const bestDisplay = document.getElementById('bestDisplay');
+  const message = document.getElementById('message');
+  const pauseOverlay = document.getElementById('pauseOverlay');
+  const gameOverOverlay = document.getElementById('gameOverOverlay');
+  const goScore = document.getElementById('goScore');
+
+  // Labels
+  const scoreLabel = document.getElementById('scoreLabel');
+  const timerLabel = document.getElementById('timerLabel');
+  const bestLabel = document.getElementById('bestLabel');
+  const pauseLabel = document.getElementById('pauseLabel');
+  const restartLabel = document.getElementById('restartLabel');
+  const pTitle = document.getElementById('pTitle');
+  const goTitle = document.getElementById('goTitle');
+  const btnResume = document.getElementById('btnResume');
+  const btnReplay = document.getElementById('btnReplay');
+
+  // ============================================================
+  // MISE À JOUR DE LA LANGUE
+  // ============================================================
+  function applyLang() {
+    scoreLabel.textContent = t('score');
+    timerLabel.textContent = t('timer');
+    bestLabel.textContent = t('best');
+    pauseLabel.textContent = t('pause');
+    restartLabel.textContent = t('restart');
+    pTitle.textContent = t('pause');
+    goTitle.textContent = t('gameOver');
+    btnResume.textContent = t('resume');
+    btnReplay.textContent = t('playAgain');
+    document.getElementById('btnLang').textContent = lg;
+    if (!gameActive && score === 0) {
+      message.textContent = t('startMessage');
+    }
+  }
+
+  document.getElementById('btnLang').addEventListener('click', () => {
+    lg = lg === 'FR' ? 'EN' : 'FR';
+    applyLang();
+  });
+
+  // ============================================================
+  // GESTION DU JEU
+  // ============================================================
+  function updateDisplay() {
+    scoreDisplay.textContent = score;
+    timerDisplay.textContent = timeLeft;
+    bestDisplay.textContent = best;
+  }
+
+  function startGame() {
+    score = 0;
+    timeLeft = DURATION;
+    gameActive = true;
+    paused = false;
+    pauseOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+    clickBox.style.pointerEvents = 'auto';
+    updateDisplay();
+    message.textContent = t('startMessage');
+
+    clearInterval(intervalId);
+    intervalId = setInterval(() => {
+      timeLeft--;
+      updateDisplay();
+      if (timeLeft <= 0) {
+        endGame();
+      }
+    }, 1000);
+  }
+
+  function endGame() {
+    clearInterval(intervalId);
+    gameActive = false;
+    paused = false;
+    clickBox.style.pointerEvents = 'none';
+
+    // Mise à jour du record local
+    if (score > best) {
+      best = score;
+      localStorage.setItem('clickAsFastBest', best);
+    }
+    updateDisplay();
+
+    // Envoi du score à la plateforme
+    window.parent.postMessage({
+      type: 'GAME_OVER',
+      score: score,
+      duration: DURATION
+    }, '*');
+
+    // Affichage overlay Game Over
+    goScore.textContent = score + ' pts';
+    gameOverOverlay.classList.remove('hidden');
+    message.textContent = '';
+  }
+
+  function togglePause() {
+    if (!gameActive || timeLeft <= 0) return;
+    paused = !paused;
+    if (paused) {
+      clearInterval(intervalId);
+      pauseOverlay.classList.remove('hidden');
+      clickBox.style.pointerEvents = 'none';
+    } else {
+      pauseOverlay.classList.add('hidden');
+      clickBox.style.pointerEvents = 'auto';
+      intervalId = setInterval(() => {
+        timeLeft--;
+        updateDisplay();
+        if (timeLeft <= 0) endGame();
+      }, 1000);
+    }
+  }
+
+  function restartGame() {
+    clearInterval(intervalId);
+    startGame();
+  }
+
+  // ============================================================
+  // ÉVÉNEMENTS
+  // ============================================================
+  clickBox.addEventListener('click', () => {
+    if (!gameActive || paused) return;
+    score++;
+    updateDisplay();
+    clickBox.style.transform = 'scale(0.92)';
+    setTimeout(() => { clickBox.style.transform = ''; }, 60);
+  });
+
+  document.getElementById('btnPause').addEventListener('click', togglePause);
+  document.getElementById('btnRestart').addEventListener('click', restartGame);
+  document.getElementById('btnResume').addEventListener('click', togglePause);
+  document.getElementById('btnReplay').addEventListener('click', restartGame);
+
+  // Touche P pour pause / Espace pour rejouer
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'p' || e.key === 'P') {
+      e.preventDefault();
+      togglePause();
+    }
+    if ((e.key === ' ' || e.key === 'Enter') && !gameActive) {
+      e.preventDefault();
+      restartGame();
+    }
+  });
+
+  // ============================================================
+  // LANCEMENT
+  // ============================================================
+  applyLang();
+  bestDisplay.textContent = best;
+  message.textContent = t('startMessage');
+  startGame();
+</script>
+</body>
+</html>

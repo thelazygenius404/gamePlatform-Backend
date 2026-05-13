@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jeu de Puzzle 3x3</title>
+    <style>
+        :root {
+            --bg-color: #1e272e;
+            --board-bg: #2c3e50;
+            --tile-color: #3498db;
+            --tile-hover: #2980b9;
+            --text-color: #ffffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        h1 { margin-bottom: 10px; }
+        
+        .game-info {
+            margin-bottom: 20px;
+            font-size: 1.2rem;
+            height: 30px;
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            background-color: var(--board-bg);
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+
+        .tile {
+            width: 80px;
+            height: 80px;
+            background-color: var(--tile-color);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .tile:hover {
+            background-color: var(--tile-hover);
+        }
+
+        .tile:active {
+            transform: scale(0.95);
+        }
+
+        .tile.empty {
+            background-color: transparent;
+            cursor: default;
+            pointer-events: none;
+        }
+
+        button {
+            margin-top: 30px;
+            padding: 12px 24px;
+            font-size: 1.1rem;
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-weight: bold;
+        }
+
+        button:hover { background-color: #27ae60; }
+        
+        .win-animation {
+            animation: pop 0.5s ease-out forwards;
+        }
+
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Taquin JS</h1>
+    <div class="game-info" id="message">Remets les cases dans l'ordre !</div>
+
+    <div id="board"></div>
+
+    <button onclick="initGame()">Mélanger & Recommencer</button>
+
+    <script>
+        const boardEl = document.getElementById('board');
+        const messageEl = document.getElementById('message');
+        const SIZE = 3;
+        let tiles = [];
+
+        // État de victoire attendu [1, 2, 3, 4, 5, 6, 7, 8, 0]
+        const winState = [...Array(SIZE * SIZE - 1).keys()].map(x => x + 1);
+        winState.push(0);
+
+        function initGame() {
+            // On part de l'état gagnant
+            tiles = [...winState];
+            messageEl.textContent = "Coups : 0";
+            messageEl.dataset.moves = 0;
+            boardEl.classList.remove('win-animation');
+            
+            // On mélange en simulant des mouvements valides 
+            // (garantit que le puzzle est résolvable à 100%)
+            shuffleBoard(150);
+            renderBoard();
+        }
+
+        function shuffleBoard(moves) {
+            let previousEmptyIndex = -1;
+            for (let i = 0; i < moves; i++) {
+                const emptyIndex = tiles.indexOf(0);
+                const validMoves = getValidMoves(emptyIndex);
+                
+                // Éviter de faire l'inverse du mouvement précédent pour bien mélanger
+                const filteredMoves = validMoves.filter(idx => idx !== previousEmptyIndex) || validMoves;
+                const randomMove = filteredMoves[Math.floor(Math.random() * filteredMoves.length)];
+                
+                // Swap
+                [tiles[emptyIndex], tiles[randomMove]] = [tiles[randomMove], tiles[emptyIndex]];
+                previousEmptyIndex = emptyIndex;
+            }
+        }
+
+        function getValidMoves(emptyIndex) {
+            const valid = [];
+            const row = Math.floor(emptyIndex / SIZE);
+            const col = emptyIndex % SIZE;
+
+            if (row > 0) valid.push(emptyIndex - SIZE); // Haut
+            if (row < SIZE - 1) valid.push(emptyIndex + SIZE); // Bas
+            if (col > 0) valid.push(emptyIndex - 1); // Gauche
+            if (col < SIZE - 1) valid.push(emptyIndex + 1); // Droite
+
+            return valid;
+        }
+
+        function renderBoard() {
+            boardEl.innerHTML = '';
+            tiles.forEach((value, index) => {
+                const tileEl = document.createElement('div');
+                tileEl.classList.add('tile');
+                
+                if (value === 0) {
+                    tileEl.classList.add('empty');
+                } else {
+                    tileEl.textContent = value;
+                    tileEl.onclick = () => moveTile(index);
+                }
+                
+                boardEl.appendChild(tileEl);
+            });
+        }
+
+        function moveTile(index) {
+            const emptyIndex = tiles.indexOf(0);
+            const validMoves = getValidMoves(emptyIndex);
+
+            if (validMoves.includes(index)) {
+                // Échanger les valeurs
+                [tiles[index], tiles[emptyIndex]] = [tiles[emptyIndex], tiles[index]];
+                
+                // Incrémenter les mouvements
+                let moves = parseInt(messageEl.dataset.moves) + 1;
+                messageEl.dataset.moves = moves;
+                messageEl.textContent = `Coups : ${moves}`;
+                
+                renderBoard();
+                checkWin();
+            }
+        }
+
+        function checkWin() {
+            if (JSON.stringify(tiles) === JSON.stringify(winState)) {
+                messageEl.textContent = "🎉 Bravo ! Tu as gagné ! 🎉";
+                boardEl.classList.add('win-animation');
+                // Désactiver les clics une fois gagné
+                const allTiles = document.querySelectorAll('.tile');
+                allTiles.forEach(t => t.onclick = null);
+            }
+        }
+
+        // Lancer le jeu au chargement
+        initGame();
+    </script>
+</body>
+</html>
