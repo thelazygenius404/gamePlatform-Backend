@@ -29,213 +29,213 @@ import java.util.List;
 
 /**
  * ════════════════════════════════════════════════════════════════════════════════
- *  SECURITY CONFIG - COMPARAISON SPRING SECURITY vs GESTION MANUELLE
+ * SECURITY CONFIG - COMPARAISON SPRING SECURITY vs GESTION MANUELLE
  * ════════════════════════════════════════════════════════════════════════════════
  *
  * RÔLE : Configuration centralisée de la sécurité de l'application.
- *        • Authentification (qui es-tu ?)
- *        • Autorisation (que peux-tu faire ?)
- *        • Protection CSRF, CORS, headers de sécurité
+ * • Authentification (qui es-tu ?)
+ * • Autorisation (que peux-tu faire ?)
+ * • Protection CSRF, CORS, headers de sécurité
  *
  * ┌─────────────────────────────────────────────────────────────────────────────┐
  * │ APPROCHE CLASSIQUE : Gestion manuelle dans chaque Servlet/Filtre           │
  * └─────────────────────────────────────────────────────────────────────────────┘
  *
  * 1. GESTION DES AUTORISATIONS (Répétée dans CHAQUE Servlet) :
- *    ───────────────────────────────────────────────────────────
+ * ───────────────────────────────────────────────────────────
  *
- *    @WebServlet("/api/admin/games")
- *    public class AdminGameServlet extends HttpServlet {
- *        protected void doPost(HttpServletRequest request, HttpServletResponse response) {
- *            // Vérification de l'authentification
- *            HttpSession session = request.getSession(false);
- *            if (session == null) {
- *                response.sendError(401, "Non authentifié");
- *                return;
- *            }
+ * @WebServlet("/api/admin/games")
+ * public class AdminGameServlet extends HttpServlet {
+ * protected void doPost(HttpServletRequest request, HttpServletResponse response) {
+ * // Vérification de l'authentification
+ * HttpSession session = request.getSession(false);
+ * if (session == null) {
+ * response.sendError(401, "Non authentifié");
+ * return;
+ * }
  *
- *            String role = (String) session.getAttribute("role");
- *            if (role == null) {
- *                response.sendError(401, "Non authentifié");
- *                return;
- *            }
+ * String role = (String) session.getAttribute("role");
+ * if (role == null) {
+ * response.sendError(401, "Non authentifié");
+ * return;
+ * }
  *
- *            // Vérification du rôle ADMIN
- *            if (!"ADMIN".equals(role)) {
- *                response.sendError(403, "Accès interdit");
- *                return;
- *            }
+ * // Vérification du rôle ADMIN
+ * if (!"ADMIN".equals(role)) {
+ * response.sendError(403, "Accès interdit");
+ * return;
+ * }
  *
- *            // Logique métier...
- *        }
- *    }
+ * // Logique métier...
+ * }
+ * }
  *
- *    @WebServlet("/api/games/premium")
- *    public class PremiumGameServlet extends HttpServlet {
- *        protected void doGet(HttpServletRequest request, HttpServletResponse response) {
- *            // MÊME code de vérification répété (20 lignes)
- *            HttpSession session = request.getSession(false);
- *            if (session == null) {
- *                response.sendError(401, "Non authentifié");
- *                return;
- *            }
+ * @WebServlet("/api/games/premium")
+ * public class PremiumGameServlet extends HttpServlet {
+ * protected void doGet(HttpServletRequest request, HttpServletResponse response) {
+ * // MÊME code de vérification répété (20 lignes)
+ * HttpSession session = request.getSession(false);
+ * if (session == null) {
+ * response.sendError(401, "Non authentifié");
+ * return;
+ * }
  *
- *            String role = (String) session.getAttribute("role");
+ * String role = (String) session.getAttribute("role");
  *
- *            // Vérification du rôle PREMIUM ou ADMIN
- *            if (!"PREMIUM".equals(role) && !"ADMIN".equals(role)) {
- *                response.sendError(403, "Accès interdit");
- *                return;
- *            }
+ * // Vérification du rôle PREMIUM ou ADMIN
+ * if (!"PREMIUM".equals(role) && !"ADMIN".equals(role)) {
+ * response.sendError(403, "Accès interdit");
+ * return;
+ * }
  *
- *            // Logique métier...
- *        }
- *    }
+ * // Logique métier...
+ * }
+ * }
  *
- *    @WebServlet("/api/scores")
- *    public class ScoreServlet extends HttpServlet {
- *        protected void doPost(HttpServletRequest request, HttpServletResponse response) {
- *            // ENCORE le même code répété (20 lignes)
- *            HttpSession session = request.getSession(false);
- *            if (session == null) {
- *                response.sendError(401, "Non authentifié");
- *                return;
- *            }
- *            // ...
- *        }
- *    }
+ * @WebServlet("/api/scores")
+ * public class ScoreServlet extends HttpServlet {
+ * protected void doPost(HttpServletRequest request, HttpServletResponse response) {
+ * // ENCORE le même code répété (20 lignes)
+ * HttpSession session = request.getSession(false);
+ * if (session == null) {
+ * response.sendError(401, "Non authentifié");
+ * return;
+ * }
+ * // ...
+ * }
+ * }
  *
- *    → PROBLÈMES :
- *      • Code dupliqué dans CHAQUE servlet (20+ lignes × 50 servlets = 1000+ lignes)
- *      • Risque d'oubli (servlet sans vérification = faille de sécurité)
- *      • Modification de la logique = modifier 50+ servlets
- *      • Pas de vue d'ensemble de la sécurité de l'application
- *      • Tests difficiles (dépendance à HttpSession)
+ * → PROBLÈMES :
+ * • Code dupliqué dans CHAQUE servlet (20+ lignes × 50 servlets = 1000+ lignes)
+ * • Risque d'oubli (servlet sans vérification = faille de sécurité)
+ * • Modification de la logique = modifier 50+ servlets
+ * • Pas de vue d'ensemble de la sécurité de l'application
+ * • Tests difficiles (dépendance à HttpSession)
  *
  * 2. GESTION DES ROUTES PUBLIQUES (Dans le filtre d'authentification) :
- *    ────────────────────────────────────────────────────────────────────
+ * ────────────────────────────────────────────────────────────────────
  *
- *    @WebFilter("/*")
- *    public class AuthFilter implements Filter {
- *        public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain) {
- *            HttpServletRequest request = (HttpServletRequest) req;
- *            String path = request.getRequestURI();
+ * @WebFilter("/*")
+ * public class AuthFilter implements Filter {
+ * public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain) {
+ * HttpServletRequest request = (HttpServletRequest) req;
+ * String path = request.getRequestURI();
  *
- *            // Liste manuelle des routes publiques (30+ lignes)
- *            if (path.equals("/api/auth/login") ||
- *                path.equals("/api/auth/register") ||
- *                path.equals("/api/auth/forgot-password") ||
- *                path.equals("/api/auth/reset-password") ||
- *                path.startsWith("/api/games") && request.getMethod().equals("GET") ||
- *                path.startsWith("/games/") ||
- *                path.equals("/") ||
- *                path.startsWith("/static/") ||
- *                path.startsWith("/css/") ||
- *                path.startsWith("/js/") ||
- *                path.startsWith("/images/") ||
- *                path.endsWith(".html") ||
- *                path.endsWith(".css") ||
- *                path.endsWith(".js") ||
- *                path.endsWith(".png") ||
- *                path.endsWith(".jpg")) {
+ * // Liste manuelle des routes publiques (30+ lignes)
+ * if (path.equals("/api/auth/login") ||
+ * path.equals("/api/auth/register") ||
+ * path.equals("/api/auth/forgot-password") ||
+ * path.equals("/api/auth/reset-password") ||
+ * path.startsWith("/api/games") && request.getMethod().equals("GET") ||
+ * path.startsWith("/games/") ||
+ * path.equals("/") ||
+ * path.startsWith("/static/") ||
+ * path.startsWith("/css/") ||
+ * path.startsWith("/js/") ||
+ * path.startsWith("/images/") ||
+ * path.endsWith(".html") ||
+ * path.endsWith(".css") ||
+ * path.endsWith(".js") ||
+ * path.endsWith(".png") ||
+ * path.endsWith(".jpg")) {
  *
- *                chain.doFilter(req, res); // Route publique
- *                return;
- *            }
+ * chain.doFilter(req, res); // Route publique
+ * return;
+ * }
  *
- *            // Vérification JWT pour les autres routes
- *            // ...
- *        }
- *    }
+ * // Vérification JWT pour les autres routes
+ * // ...
+ * }
+ * }
  *
- *    → PROBLÈMES :
- *      • Configuration dispersée (filtre + servlets)
- *      • If/else répétitifs et difficiles à lire
- *      • Ajout d'une route publique = modifier le filtre
- *      • Risque d'erreur (typo dans le chemin)
- *      • Pas de gestion par méthode HTTP (GET/POST) claire
+ * → PROBLÈMES :
+ * • Configuration dispersée (filtre + servlets)
+ * • If/else répétitifs et difficiles à lire
+ * • Ajout d'une route publique = modifier le filtre
+ * • Risque d'erreur (typo dans le chemin)
+ * • Pas de gestion par méthode HTTP (GET/POST) claire
  *
  * 3. PROTECTION CSRF (Cross-Site Request Forgery) :
- *    ───────────────────────────────────────────────
+ * ───────────────────────────────────────────────
  *
- *    SANS framework :
- *    ───────────────
- *    @WebServlet("/api/*")
- *    public class CsrfFilter implements Filter {
- *        public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain) {
- *            HttpServletRequest request = (HttpServletRequest) req;
- *            HttpServletResponse response = (HttpServletResponse) res;
+ * SANS framework :
+ * ───────────────
+ * @WebServlet("/api/*")
+ * public class CsrfFilter implements Filter {
+ * public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain) {
+ * HttpServletRequest request = (HttpServletRequest) req;
+ * HttpServletResponse response = (HttpServletResponse) res;
  *
- *            // Génération du token CSRF lors du GET
- *            if (request.getMethod().equals("GET")) {
- *                String csrfToken = UUID.randomUUID().toString();
- *                HttpSession session = request.getSession(true);
- *                session.setAttribute("csrfToken", csrfToken);
+ * // Génération du token CSRF lors du GET
+ * if (request.getMethod().equals("GET")) {
+ * String csrfToken = UUID.randomUUID().toString();
+ * HttpSession session = request.getSession(true);
+ * session.setAttribute("csrfToken", csrfToken);
  *
- *                // Ajout dans un cookie ou header
- *                Cookie cookie = new Cookie("XSRF-TOKEN", csrfToken);
- *                cookie.setPath("/");
- *                cookie.setHttpOnly(false); // Accessible en JS
- *                response.addCookie(cookie);
- *            }
+ * // Ajout dans un cookie ou header
+ * Cookie cookie = new Cookie("XSRF-TOKEN", csrfToken);
+ * cookie.setPath("/");
+ * cookie.setHttpOnly(false); // Accessible en JS
+ * response.addCookie(cookie);
+ * }
  *
- *            // Vérification lors du POST/PUT/DELETE
- *            if (request.getMethod().equals("POST") ||
- *                request.getMethod().equals("PUT") ||
- *                request.getMethod().equals("DELETE")) {
+ * // Vérification lors du POST/PUT/DELETE
+ * if (request.getMethod().equals("POST") ||
+ * request.getMethod().equals("PUT") ||
+ * request.getMethod().equals("DELETE")) {
  *
- *                String csrfTokenFromHeader = request.getHeader("X-XSRF-TOKEN");
- *                HttpSession session = request.getSession(false);
- *                String csrfTokenFromSession = (String) session.getAttribute("csrfToken");
+ * String csrfTokenFromHeader = request.getHeader("X-XSRF-TOKEN");
+ * HttpSession session = request.getSession(false);
+ * String csrfTokenFromSession = (String) session.getAttribute("csrfToken");
  *
- *                if (csrfTokenFromHeader == null || !csrfTokenFromHeader.equals(csrfTokenFromSession)) {
- *                    response.sendError(403, "CSRF token invalide");
- *                    return;
- *                }
- *            }
+ * if (csrfTokenFromHeader == null || !csrfTokenFromHeader.equals(csrfTokenFromSession)) {
+ * response.sendError(403, "CSRF token invalide");
+ * return;
+ * }
+ * }
  *
- *            chain.doFilter(req, res);
- *        }
- *    }
+ * chain.doFilter(req, res);
+ * }
+ * }
  *
- *    → PROBLÈMES :
- *      • 30+ lignes de code à écrire et maintenir
- *      • Risque d'oubli (un servlet sans protection)
- *      • Gestion manuelle des cookies
- *      • Incompatible avec les API REST stateless (JWT)
+ * → PROBLÈMES :
+ * • 30+ lignes de code à écrire et maintenir
+ * • Risque d'oubli (un servlet sans protection)
+ * • Gestion manuelle des cookies
+ * • Incompatible avec les API REST stateless (JWT)
  *
  * 4. CORS (Cross-Origin Resource Sharing) :
- *    ───────────────────────────────────────
+ * ───────────────────────────────────────
  *
- *    SANS framework :
- *    ───────────────
- *    @WebFilter("/*")
- *    public class CorsFilter implements Filter {
- *        public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain) {
- *            HttpServletResponse response = (HttpServletResponse) res;
- *            HttpServletRequest request = (HttpServletRequest) req;
+ * SANS framework :
+ * ───────────────
+ * @WebFilter("/*")
+ * public class CorsFilter implements Filter {
+ * public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain) {
+ * HttpServletResponse response = (HttpServletResponse) res;
+ * HttpServletRequest request = (HttpServletRequest) req;
  *
- *            // Configuration manuelle des headers CORS
- *            response.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
- *            response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
- *            response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
- *            response.setHeader("Access-Control-Allow-Credentials", "true");
- *            response.setHeader("Access-Control-Max-Age", "3600");
+ * // Configuration manuelle des headers CORS
+ * response.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
+ * response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+ * response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+ * response.setHeader("Access-Control-Allow-Credentials", "true");
+ * response.setHeader("Access-Control-Max-Age", "3600");
  *
- *            // Gestion de la preflight request (OPTIONS)
- *            if (request.getMethod().equals("OPTIONS")) {
- *                response.setStatus(HttpServletResponse.SC_OK);
- *                return;
- *            }
+ * // Gestion de la preflight request (OPTIONS)
+ * if (request.getMethod().equals("OPTIONS")) {
+ * response.setStatus(HttpServletResponse.SC_OK);
+ * return;
+ * }
  *
- *            chain.doFilter(req, res);
- *        }
- *    }
+ * chain.doFilter(req, res);
+ * }
+ * }
  *
- *    → PROBLÈMES :
- *      • Headers hardcodés (pas de configuration par environnement)
- *      • Gestion manuelle de la preflight request
- *      • Risque de sécurité (Allow-Origin: * en production par erreur)
+ * → PROBLÈMES :
+ * • Headers hardcodés (pas de configuration par environnement)
+ * • Gestion manuelle de la preflight request
+ * • Risque de sécurité (Allow-Origin: * en production par erreur)
  *
  * ┌─────────────────────────────────────────────────────────────────────────────┐
  * │ APPROCHE SPRING SECURITY : Configuration déclarative centralisée            │
@@ -245,38 +245,38 @@ import java.util.List;
  * ──────────
  *
  * ✅ CONFIGURATION CENTRALISÉE :
- *    • Un seul fichier (SecurityConfig.java)
- *    • Vue d'ensemble claire de la sécurité
- *    • Facile à auditer
+ * • Un seul fichier (SecurityConfig.java)
+ * • Vue d'ensemble claire de la sécurité
+ * • Facile à auditer
  *
  * ✅ DÉCLARATIF vs IMPÉRATIF :
- *    • SANS : if/else répétitifs dans chaque servlet
- *    • AVEC : .requestMatchers("/api/admin/**").hasRole("ADMIN")
+ * • SANS : if/else répétitifs dans chaque servlet
+ * • AVEC : .requestMatchers("/api/admin/**").hasRole("ADMIN")
  *
  * ✅ PAS DE DUPLICATION :
- *    • Règles définies une seule fois
- *    • Appliquées automatiquement partout
+ * • Règles définies une seule fois
+ * • Appliquées automatiquement partout
  *
  * ✅ TYPE-SAFE :
- *    • Erreur de compilation si route mal définie
- *    • Auto-complétion dans l'IDE
+ * • Erreur de compilation si route mal définie
+ * • Auto-complétion dans l'IDE
  *
  * ✅ TESTABILITÉ :
- *    • @WithMockUser pour tester les autorisations
- *    • Pas de dépendance à HttpSession
+ * • @WithMockUser pour tester les autorisations
+ * • Pas de dépendance à HttpSession
  *
  * ════════════════════════════════════════════════════════════════════════════════
  *
  * @Configuration : Indique que cette classe contient des définitions de beans Spring.
- *                  Spring scanne cette classe au démarrage et enregistre les @Bean.
+ * Spring scanne cette classe au démarrage et enregistre les @Bean.
  *
  * @EnableWebSecurity : Active Spring Security dans l'application.
- *                       Importe toutes les configurations par défaut de Spring Security.
+ * Importe toutes les configurations par défaut de Spring Security.
  *
  * @EnableMethodSecurity : Active les annotations de sécurité au niveau des méthodes.
- *                         • @PreAuthorize("hasRole('ADMIN')")
- *                         • @Secured("ROLE_ADMIN")
- *                         • @RolesAllowed("ADMIN")
+ * • @PreAuthorize("hasRole('ADMIN')")
+ * • @Secured("ROLE_ADMIN")
+ * • @RolesAllowed("ADMIN")
  *
  * @RequiredArgsConstructor : Génère le constructeur avec les dépendances final.
  */
@@ -300,27 +300,27 @@ public class SecurityConfig {
      * ════════════════════════════════════════════════════════════════════════════
      *
      * CORS (Cross-Origin Resource Sharing) :
-     *    Permet au frontend (http://localhost:3000) d'appeler l'API backend
-     *    (http://localhost:8080) malgré la même politique d'origine (Same-Origin Policy).
+     * Permet au frontend (http://localhost:3000) d'appeler l'API backend
+     * (http://localhost:8080) malgré la même politique d'origine (Same-Origin Policy).
      *
      * SANS SPRING (Filtre manuel - 20+ lignes) :
      * ──────────────────────────────────────────
-     *    @WebFilter("/*")
-     *    public class CorsFilter implements Filter {
-     *        public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain) {
-     *            HttpServletResponse response = (HttpServletResponse) res;
-     *            response.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
-     *            response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-     *            response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
-     *            response.setHeader("Access-Control-Allow-Credentials", "true");
+     * @WebFilter("/*")
+     * public class CorsFilter implements Filter {
+     * public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain) {
+     * HttpServletResponse response = (HttpServletResponse) res;
+     * response.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
+     * response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+     * response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+     * response.setHeader("Access-Control-Allow-Credentials", "true");
      *
-     *            if (request.getMethod().equals("OPTIONS")) {
-     *                response.setStatus(200);
-     *                return;
-     *            }
-     *            chain.doFilter(req, res);
-     *        }
-     *    }
+     * if (request.getMethod().equals("OPTIONS")) {
+     * response.setStatus(200);
+     * return;
+     * }
+     * chain.doFilter(req, res);
+     * }
+     * }
      *
      * AVEC SPRING (Bean - 8 lignes) :
      * ────────────────────────────────
@@ -347,21 +347,21 @@ public class SecurityConfig {
      *
      * SANS SPRING SECURITY (~500+ lignes dispersées dans 10+ filtres/servlets) :
      * ──────────────────────────────────────────────────────────────────────────
-     *    • AuthFilter.java (150 lignes) : Vérification JWT
-     *    • CorsFilter.java (30 lignes) : Gestion CORS
-     *    • CsrfFilter.java (40 lignes) : Protection CSRF
-     *    • AdminServlet.java (20 lignes) : Vérification rôle ADMIN
-     *    • PremiumServlet.java (20 lignes) : Vérification rôle PREMIUM
-     *    • ... 40+ servlets avec vérifications répétées
+     * • AuthFilter.java (150 lignes) : Vérification JWT
+     * • CorsFilter.java (30 lignes) : Gestion CORS
+     * • CsrfFilter.java (40 lignes) : Protection CSRF
+     * • AdminServlet.java (20 lignes) : Vérification rôle ADMIN
+     * • PremiumServlet.java (20 lignes) : Vérification rôle PREMIUM
+     * • ... 40+ servlets avec vérifications répétées
      *
-     *    Total : ~500-1000 lignes dispersées
+     * Total : ~500-1000 lignes dispersées
      *
      * AVEC SPRING SECURITY (~50 lignes centralisées dans ce fichier) :
      * ───────────────────────────────────────────────────────────────
-     *    Configuration déclarative et centralisée ci-dessous.
+     * Configuration déclarative et centralisée ci-dessous.
      *
      * @Bean : Enregistre la méthode comme un bean Spring.
-     *         Spring Security utilise ce bean pour configurer la sécurité.
+     * Spring Security utilise ce bean pour configurer la sécurité.
      */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -519,6 +519,14 @@ public class SecurityConfig {
                         // Catégories publiques
                         .requestMatchers(HttpMethod.GET, "/api/categories").permitAll()
 
+                        // Profils et dossiers statiques d'assets
+                        .requestMatchers("/api/profile/**").authenticated()
+                        .requestMatchers(
+                                "/uploads/**",
+                                "/avatars/**",
+                                "/static/**"
+                        ).permitAll()   // ← AJOUTE CECI
+
                         // ──────────────────────────────────────────────────────
                         // PAR DÉFAUT : Toute autre route nécessite authentification
                         // ──────────────────────────────────────────────────────
@@ -605,35 +613,35 @@ public class SecurityConfig {
      *
      * SANS SPRING :
      * ────────────
-     *    // Dans chaque servlet où on gère les mots de passe
-     *    String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt(12));
+     * // Dans chaque servlet où on gère les mots de passe
+     * String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt(12));
      *
-     *    // Vérification
-     *    boolean matches = BCrypt.checkpw(rawPassword, hashedPassword);
+     * // Vérification
+     * boolean matches = BCrypt.checkpw(rawPassword, hashedPassword);
      *
-     *    → Duplication du code
-     *    → Nombre de rounds (12) hardcodé partout
-     *    → Difficile de changer d'algorithme (Argon2, PBKDF2)
+     * → Duplication du code
+     * → Nombre de rounds (12) hardcodé partout
+     * → Difficile de changer d'algorithme (Argon2, PBKDF2)
      *
      * AVEC SPRING :
      * ────────────
-     *    @Bean
-     *    public PasswordEncoder passwordEncoder() {
-     *        return new BCryptPasswordEncoder(12);
-     *    }
+     * @Bean
+     * public PasswordEncoder passwordEncoder() {
+     * return new BCryptPasswordEncoder(12);
+     * }
      *
-     *    // Injection dans les services
-     *    passwordEncoder.encode(rawPassword);
-     *    passwordEncoder.matches(rawPassword, encodedPassword);
+     * // Injection dans les services
+     * passwordEncoder.encode(rawPassword);
+     * passwordEncoder.matches(rawPassword, encodedPassword);
      *
-     *    → Configuration centralisée
-     *    → Facile de changer d'algorithme (1 ligne à modifier)
-     *    → Interface PasswordEncoder (découplage)
+     * → Configuration centralisée
+     * → Facile de changer d'algorithme (1 ligne à modifier)
+     * → Interface PasswordEncoder (découplage)
      *
      * BCryptPasswordEncoder(12) :
-     *    • 12 rounds = 2^12 = 4096 itérations
-     *    • Plus le nombre est élevé, plus c'est sécurisé mais lent
-     *    • Recommandation : 12 (compromis sécurité/performance)
+     * • 12 rounds = 2^12 = 4096 itérations
+     * • Plus le nombre est élevé, plus c'est sécurisé mais lent
+     * • Recommandation : 12 (compromis sécurité/performance)
      */
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -649,36 +657,36 @@ public class SecurityConfig {
      *
      * SANS SPRING :
      * ────────────
-     *    User user = userDAO.findByEmail(email);
-     *    if (user == null) throw new Exception("User not found");
-     *    if (!BCrypt.checkpw(password, user.getPassword())) {
-     *        throw new Exception("Bad password");
-     *    }
-     *    if ("SUSPENDED".equals(user.getStatus())) {
-     *        throw new Exception("Account suspended");
-     *    }
-     *    // ... autres vérifications
+     * User user = userDAO.findByEmail(email);
+     * if (user == null) throw new Exception("User not found");
+     * if (!BCrypt.checkpw(password, user.getPassword())) {
+     * throw new Exception("Bad password");
+     * }
+     * if ("SUSPENDED".equals(user.getStatus())) {
+     * throw new Exception("Account suspended");
+     * }
+     * // ... autres vérifications
      *
-     *    → 30+ lignes répétées dans chaque servlet de login
+     * → 30+ lignes répétées dans chaque servlet de login
      *
      * AVEC SPRING :
      * ────────────
-     *    DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-     *    provider.setUserDetailsService(userDetailsService);
-     *    provider.setPasswordEncoder(passwordEncoder);
+     * DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+     * provider.setUserDetailsService(userDetailsService);
+     * provider.setPasswordEncoder(passwordEncoder);
      *
-     *    // Utilisation
-     *    authenticationManager.authenticate(
-     *        new UsernamePasswordAuthenticationToken(email, password)
-     *    );
+     * // Utilisation
+     * authenticationManager.authenticate(
+     * new UsernamePasswordAuthenticationToken(email, password)
+     * );
      *
-     *    → Spring Security appelle automatiquement :
-     *      1. userDetailsService.loadUserByUsername(email)
-     *      2. passwordEncoder.matches(password, user.getPassword())
-     *      3. Vérifie isEnabled(), isAccountNonLocked(), etc.
-     *      4. Lance des exceptions typées (BadCredentialsException, etc.)
+     * → Spring Security appelle automatiquement :
+     * 1. userDetailsService.loadUserByUsername(email)
+     * 2. passwordEncoder.matches(password, user.getPassword())
+     * 3. Vérifie isEnabled(), isAccountNonLocked(), etc.
+     * 4. Lance des exceptions typées (BadCredentialsException, etc.)
      *
-     *    → 1 ligne vs 30+ lignes manuelles
+     * → 1 ligne vs 30+ lignes manuelles
      */
     @Bean
     public AuthenticationProvider authenticationProvider() {
@@ -697,16 +705,16 @@ public class SecurityConfig {
      *
      * USAGE :
      * ──────
-     *    @Service
-     *    public class AuthServiceImpl {
-     *        private final AuthenticationManager authenticationManager;
+     * @Service
+     * public class AuthServiceImpl {
+     * private final AuthenticationManager authenticationManager;
      *
-     *        public void login(LoginRequest request) {
-     *            authenticationManager.authenticate(
-     *                new UsernamePasswordAuthenticationToken(email, password)
-     *            );
-     *        }
-     *    }
+     * public void login(LoginRequest request) {
+     * authenticationManager.authenticate(
+     * new UsernamePasswordAuthenticationToken(email, password)
+     * );
+     * }
+     * }
      *
      * SANS SPRING : Aucun point d'entrée centralisé, logique dispersée
      * AVEC SPRING : AuthenticationManager → délègue au provider → UserDetailsService

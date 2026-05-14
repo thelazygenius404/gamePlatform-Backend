@@ -13,6 +13,7 @@ public class AuthResponse {
     private String userId;
     private String email;
     private String pseudo;
+    private String avatarUrl;    // ← nouveau champ
     private Role role;
     private long expiresIn;    // Durée de validité en ms
 }
